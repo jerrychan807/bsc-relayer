@@ -1,31 +1,22 @@
 package executor
 
 import (
-	"encoding/hex"
-	"fmt"
-	"strconv"
-	"testing"
-
 	relayercommon "github.com/binance-chain/bsc-relayer/common"
 
 	config "github.com/binance-chain/bsc-relayer/config"
-	"github.com/binance-chain/bsc-relayer/executor/relayerhub"
-	ctypes "github.com/binance-chain/go-sdk/common/types"
-	"github.com/stretchr/testify/require"
-	rpcclient "github.com/tendermint/tendermint/rpc/client"
 )
 
 const (
-	BBCRpc     = "tcp://seed-pre-s3.binance.org:80"
-	provider   = "http://data-seed-prebsc-1-s1.binance.org:8545"
-	privateKey = "EB19E69C9EBF9737FCB41AFFF5D6E3B3711E15579E5FA89F03DC4656EEC34E4D" // Just for test, never used in production environment
+	BBCRpc     = "tcp://192.168.2.24:26657"
+	provider   = "http://192.168.2.21:8545"
+	privateKey = "9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3" // Just for test, never used in production environment
 )
 
 var (
 	cfg = &config.Config{
 		CrossChainConfig: config.CrossChainConfig{
-			SourceChainID: 1,
-			DestChainID:   97,
+			SourceChainID: 715,
+			DestChainID:   714,
 		},
 		BBCConfig: config.BBCConfig{
 			RpcAddrs: []string{BBCRpc},
@@ -45,6 +36,7 @@ var (
 	GovChannelID         relayercommon.CrossChainChannelID = 0x09
 )
 
+/*
 func TestBSCExecutor_SyncTendermintLightClientHeader(t *testing.T) {
 	bbcExecutor, err := NewBBCExecutor(cfg, ctypes.TmpTestNetwork)
 	require.NoError(t, err)
@@ -241,3 +233,4 @@ func TestBSCExecutor_QueryPackage(t *testing.T) {
 	fmt.Println("value: " + hex.EncodeToString(value))
 	fmt.Println("proofBytes: " + hex.EncodeToString(proofBytes))
 }
+*/
