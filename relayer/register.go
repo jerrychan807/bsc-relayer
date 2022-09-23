@@ -5,7 +5,7 @@ import (
 
 	"github.com/binance-chain/bsc-relayer/common"
 )
-
+// 在Bsc的RelayerHub.sol注册成为中继者
 func (r *Relayer) registerRelayerHub() {
 	isRelayer, err := r.bscExecutor.IsRelayer()
 	if err != nil {
@@ -17,6 +17,7 @@ func (r *Relayer) registerRelayerHub() {
 	}
 
 	common.Logger.Info("Register this relayer to RelayerHub")
+	// 在RelayerHub合约里注册成为中继者
 	_, err = r.bscExecutor.RegisterRelayer()
 	if err != nil {
 		panic(err)

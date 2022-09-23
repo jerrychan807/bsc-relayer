@@ -24,6 +24,7 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 )
 
+// 信标链客户端
 type BBCClient struct {
 	BBCClient     *rpc.HTTP
 	Provider      string
@@ -41,6 +42,7 @@ type BBCExecutor struct {
 	destChainID   common.CrossChainID
 }
 
+// 获取助记词
 func getMnemonic(cfg *config.BBCConfig) (string, error) {
 	var mnemonic string
 	if cfg.MnemonicType == config.KeyTypeAWSMnemonic {
@@ -66,6 +68,7 @@ func getMnemonic(cfg *config.BBCConfig) (string, error) {
 	return mnemonic, nil
 }
 
+//
 func initBBCClients(keyManager keys.KeyManager, providers []string, network ctypes.ChainNetwork) []*BBCClient {
 	bcClients := make([]*BBCClient, 0)
 	for _, provider := range providers {
@@ -98,8 +101,8 @@ func NewBBCExecutor(cfg *config.Config, networkType ctypes.ChainNetwork) (*BBCEx
 		BBCClients:    initBBCClients(keyManager, cfg.BBCConfig.RpcAddrs, networkType),
 		keyManager:    keyManager,
 		Config:        cfg,
-		sourceChainID: common.CrossChainID(cfg.CrossChainConfig.SourceChainID),
-		destChainID:   common.CrossChainID(cfg.CrossChainConfig.DestChainID),
+		sourceChainID: common.CrossChainID(cfg.CrossChainConfig.SourceChainID), // 信标链Id
+		destChainID:   common.CrossChainID(cfg.CrossChainConfig.DestChainID),   // 目标链:智能链Id
 	}, nil
 }
 
@@ -129,18 +132,22 @@ func (executor *BBCExecutor) GetLatestBlockHeight(client rpc.Client) (int64, err
 
 func (executor *BBCExecutor) UpdateClients() {
 	for {
+		// cLi会频繁输出
 		common.Logger.Infof("Start to monitor bc data-seeds healthy")
 		for _, bbcClient := range executor.BBCClients {
 			if time.Since(bbcClient.UpdatedAt).Seconds() > DataSeedDenyServiceThreshold {
 				msg := fmt.Sprintf("data seed %s is not accessable", bbcClient.Provider)
 				common.Logger.Error(msg)
+				// tg提醒,后面再注册试试
 				config.SendTelegramMessage(executor.Config.AlertConfig.Identity, executor.Config.AlertConfig.TelegramBotId, executor.Config.AlertConfig.TelegramChatId, msg)
 			}
+			// 获取区块高度
 			height, err := executor.GetLatestBlockHeight(bbcClient.BBCClient)
 			if err != nil {
 				common.Logger.Errorf("get latest block height error, err=%s", err.Error())
 				continue
 			}
+			common.Logger.Infof("*** bc height: %d", height)
 			bbcClient.CurrentHeight = height
 			bbcClient.UpdatedAt = time.Now()
 		}
@@ -158,6 +165,7 @@ func (executor *BBCExecutor) UpdateClients() {
 			executor.clientIdx = highestIdx
 			executor.mutex.Unlock()
 		}
+		// 休眠一段时间
 		time.Sleep(SleepSecondForUpdateClient * time.Second)
 	}
 }
@@ -166,12 +174,14 @@ func (executor *BBCExecutor) SubmitEvidence(headers []*bsc.Header) (*coretypes.R
 	return client.BSCSubmitEvidence(executor.GetClient(), executor.keyManager.GetAddr(), headers, rpc.Sync)
 }
 
+// 监控跨链数据包
 func (executor *BBCExecutor) MonitorCrossChainPackage(height int64, preValidatorsHash cmn.HexBytes) (*common.TaskSet, cmn.HexBytes, error) {
+	// 获取区块信息
 	block, err := executor.GetClient().Block(&height)
 	if err != nil {
 		return nil, nil, err
 	}
-
+	// 获取区块
 	blockResults, err := executor.GetClient().BlockResults(&height)
 	if err != nil {
 		return nil, nil, err
@@ -182,8 +192,10 @@ func (executor *BBCExecutor) MonitorCrossChainPackage(height int64, preValidator
 
 	var curValidatorsHash cmn.HexBytes
 	if preValidatorsHash != nil {
+		// validators hash发生变化
 		if !bytes.Equal(block.Block.Header.ValidatorsHash, preValidatorsHash) ||
 			!bytes.Equal(block.Block.Header.ValidatorsHash, block.Block.Header.NextValidatorsHash) {
+			// 设置新任务
 			taskSet.TaskList = append(taskSet.TaskList, common.Task{
 				ChannelID: PureHeaderSyncChannelID,
 			})
@@ -192,8 +204,11 @@ func (executor *BBCExecutor) MonitorCrossChainPackage(height int64, preValidator
 			curValidatorsHash = preValidatorsHash
 		}
 	}
-
+	//
 	for _, event := range blockResults.Results.EndBlock.Events {
+		// CrossChainPackageEventType = "IBCPackage"
+		// eg:在bc上创建新的验证者会出现 event: type:"IBCPackage" attributes:<key:"IBCPackageInfo" value:"2::8::0" >
+
 		if event.Type == CrossChainPackageEventType {
 			for _, tag := range event.Attributes {
 				if string(tag.Key) != CorssChainPackageInfoAttributeKey {
@@ -321,6 +336,7 @@ func (executor *BBCExecutor) QueryTendermintHeader(height int64) (*common.Header
 }
 
 func (executor *BBCExecutor) QueryKeyWithProof(key []byte, height int64) (int64, []byte, []byte, []byte, error) {
+	// ABCI 查询
 	opts := rpcclient.ABCIQueryOptions{
 		Height: height,
 		Prove:  true,

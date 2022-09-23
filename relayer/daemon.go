@@ -36,8 +36,11 @@ func (r *Relayer) relayerCompetitionDaemon(startHeight uint64, curValidatorsHash
 	height := startHeight
 	common.Logger.Info("Start relayer daemon in competition mode")
 	for {
+		// 获取最新区块高度
 		latestHeight := r.getLatestHeight() - 1
 		if latestHeight > height+r.bbcExecutor.Config.BBCConfig.BehindBlockThreshold {
+			common.Logger.Infof("[*] latestHeight > height + BehindBlockThreshold = %d > %d + %s", latestHeight, height, r.bbcExecutor.Config.BBCConfig.BehindBlockThreshold)
+			common.Logger.Infof("[*] cleanPreviousPackages")
 			_, err := r.cleanPreviousPackages(latestHeight)
 			if err != nil {
 				common.Logger.Error(err.Error())
@@ -52,7 +55,7 @@ func (r *Relayer) relayerCompetitionDaemon(startHeight uint64, curValidatorsHash
 			time.Sleep(sleepTime)
 			continue
 		}
-
+		// 验证者集合变更、hash
 		// Found validator set change
 		if len(tashSet.TaskList) > 0 {
 			if tashSet.TaskList[0].ChannelID == executor.PureHeaderSyncChannelID {
@@ -77,7 +80,7 @@ func (r *Relayer) relayerCompetitionDaemon(startHeight uint64, curValidatorsHash
 			height++
 			continue // skip this height
 		}
-
+		// 调用TendermintLight合约同步区块头
 		txHash, err := r.bscExecutor.SyncTendermintLightClientHeader(tashSet.Height + 1)
 		if err != nil {
 			common.Logger.Error(err.Error())
@@ -127,7 +130,7 @@ func (r *Relayer) relayerDaemon(curValidatorsHash cmn.HexBytes) {
 			if err != nil {
 				common.Logger.Error(err.Error())
 			}
-		} else if height % r.bbcExecutor.Config.BBCConfig.CleanUpBlockInterval == 0 {
+		} else if height%r.bbcExecutor.Config.BBCConfig.CleanUpBlockInterval == 0 {
 			needAccelerate, err = r.cleanPreviousPackages(height)
 			if err != nil {
 				common.Logger.Error(err.Error())
@@ -193,11 +196,11 @@ func (r *Relayer) txTracker() {
 				statistic.SuccessTx++
 			} else {
 				txStatus = model.Failure
-				accumulatedFailedTxFee , _ := decimal.NewFromString(statistic.AccumulatedFailedTxFee)
+				accumulatedFailedTxFee, _ := decimal.NewFromString(statistic.AccumulatedFailedTxFee)
 				statistic.AccumulatedFailedTxFee = accumulatedFailedTxFee.Add(decimal.NewFromInt(int64(txFee))).String()
 				statistic.FailedTx++
 			}
-			accumulatedTotalTxFee , _ := decimal.NewFromString(statistic.AccumulatedTotalTxFee)
+			accumulatedTotalTxFee, _ := decimal.NewFromString(statistic.AccumulatedTotalTxFee)
 			statistic.AccumulatedTotalTxFee = accumulatedTotalTxFee.Add(decimal.NewFromInt(int64(txFee))).String()
 			err = r.db.Model(model.RelayTransaction{}).Where("id = ?", tx.Id).Updates(
 				map[string]interface{}{

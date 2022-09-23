@@ -48,7 +48,7 @@ func printUsage() {
 
 func main() {
 	initFlags()
-
+	//
 	bbcNetworkType := viper.GetInt(flagBBCNetworkType)
 	if bbcNetworkType != int(types.TestNetwork) && bbcNetworkType != int(types.TmpTestNetwork) && bbcNetworkType != int(types.ProdNetwork) {
 		printUsage()
@@ -62,7 +62,7 @@ func main() {
 		return
 	}
 	var cfg *config.Config
-	if configType == config.AWSConfig {
+	if configType == config.AWSConfig { // 应该是云配置模式
 		awsSecretKey := viper.GetString(flagConfigAwsSecretKey)
 		if awsSecretKey == "" {
 			printUsage()
@@ -81,7 +81,7 @@ func main() {
 			return
 		}
 		cfg = config.ParseConfigFromJson(configContent)
-	} else {
+	} else { // 本地配置文件模式
 		configFilePath := viper.GetString(flagConfigPath)
 		if configFilePath == "" {
 			printUsage()
@@ -117,18 +117,27 @@ func main() {
 		return
 	}
 
+
+
 	bscExecutor, err := executor.NewBSCExecutor(db, bbcExecutor, cfg)
 	if err != nil {
 		common.Logger.Error(err.Error())
 		return
 	}
 	abciInfo, err := bbcExecutor.GetClient().ABCIInfo()
+	fmt.Println("[*] abciInfo: ")
+	fmt.Println(abciInfo)
+	println("\n")
+
 	if err != nil {
 		common.Logger.Error(err.Error())
 		return
 	}
 	startHeight := abciInfo.Response.LastBlockHeight - 1
 	block, err := bbcExecutor.GetClient().Block(&(startHeight))
+	fmt.Println("[*] block: ")
+	fmt.Println(block)
+	println("\n")
 	if err != nil {
 		common.Logger.Error(err.Error())
 		return

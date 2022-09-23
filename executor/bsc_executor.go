@@ -109,8 +109,8 @@ func NewBSCExecutor(db *gorm.DB, bbcExecutor *BBCExecutor, cfg *config.Config) (
 		bscClients:    initClients(cfg.BSCConfig.Providers),
 		privateKey:    privKey,
 		txSender:      txSender,
-		sourceChainID: relayercommon.CrossChainID(cfg.CrossChainConfig.SourceChainID),
-		destChainID:   relayercommon.CrossChainID(cfg.CrossChainConfig.DestChainID),
+		sourceChainID: relayercommon.CrossChainID(cfg.CrossChainConfig.SourceChainID), // 信标链ID
+		destChainID:   relayercommon.CrossChainID(cfg.CrossChainConfig.DestChainID),   // 智能链ID
 		cfg:           cfg,
 	}, nil
 }
@@ -208,7 +208,7 @@ func (executor *BSCExecutor) SyncTendermintLightClientHeader(height uint64) (com
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	// tendermintlightclient合约实例
 	instance, err := tendermintlightclient.NewTendermintlightclient(tendermintLightClientContractAddr, executor.GetClient())
 	if err != nil {
 		return common.Hash{}, err
@@ -216,6 +216,7 @@ func (executor *BSCExecutor) SyncTendermintLightClientHeader(height uint64) (com
 
 	//TODO optimize
 tryAgain:
+	// 查询bc的区块头
 	header, err := executor.bbcExecutor.QueryTendermintHeader(int64(height))
 	if err != nil {
 		if isHeaderNonExistingErr(err) {
@@ -224,17 +225,17 @@ tryAgain:
 			return common.Hash{}, err
 		}
 	}
-
+	// header哈希后的字节数组
 	headerBytes, err := header.EncodeHeader()
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	// 调用合约的SyncTendermintLightClientHeader方法
 	tx, err := instance.SyncTendermintHeader(txOpts, headerBytes, height)
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	//
 	relayTx := &model.RelayTransaction{
 		TxHash: tx.Hash().String(),
 		Type:   model.SyncBlockHeader,
@@ -253,7 +254,7 @@ tryAgain:
 		CreateTime: time.Now().Unix(),
 		UpdateTime: 0,
 	}
-
+	// 保存到数据库
 	err = executor.saveRelayTx(relayTx)
 	if err != nil {
 		return common.Hash{}, err
@@ -267,13 +268,22 @@ func (executor *BSCExecutor) CallBuildInSystemContract(channelID relayercommon.C
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	// 跨链合约实例
 	crossChainInstance, err := crosschain.NewCrosschain(crossChainContractAddr, executor.GetClient())
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	// 跨链合约实例调用HandlePackage函数
+	// parms: txOpts连接
+	// solidity函数: function handlePackage(bytes calldata payload, bytes calldata proof, uint64 height, uint64 packageSequence, uint8 channelId)
+	//
 	tx, err := crossChainInstance.HandlePackage(txOpts, msgBytes, proofBytes, height+1, sequence, uint8(channelID))
+	relayercommon.Logger.Infof("[*] tx.Data(): %s", msgBytes)
+	relayercommon.Logger.Infof("[*] msgBytes: %s", msgBytes) // 字节数组
+	relayercommon.Logger.Infof("[*] proofBytes: %s", proofBytes)
+	relayercommon.Logger.Infof("[*] msgBytes: %s", msgBytes)
+	relayercommon.Logger.Infof("[*] msgBytes: %s", msgBytes)
+
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -305,6 +315,7 @@ func (executor *BSCExecutor) CallBuildInSystemContract(channelID relayercommon.C
 	return tx.Hash(), nil
 }
 
+// 获取跨链包数据
 func (executor *BSCExecutor) GetPackage(channelID relayercommon.CrossChainChannelID, sequence, height uint64) ([]byte, []byte, error) {
 	key := buildCrossChainPackageKey(executor.sourceChainID, executor.destChainID, channelID, sequence)
 	var value []byte
@@ -329,6 +340,7 @@ func (executor *BSCExecutor) GetPackage(channelID relayercommon.CrossChainChanne
 	return value, proofBytes, nil
 }
 
+// 发送跨链包
 func (executor *BSCExecutor) RelayCrossChainPackage(channelID relayercommon.CrossChainChannelID, sequence, height uint64) (common.Hash, error) {
 	msgBytes, proofBytes, err := executor.GetPackage(channelID, sequence, height)
 	if err != nil {
@@ -338,11 +350,12 @@ func (executor *BSCExecutor) RelayCrossChainPackage(channelID relayercommon.Cros
 	if err != nil {
 		return common.Hash{}, err
 	}
+	// 调用系统合约
 	tx, err := executor.CallBuildInSystemContract(channelID, height, sequence, msgBytes, proofBytes, nonce)
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	// Example: INFO RelayCrossChainPackage channelID: 8, sequence: 69, txHash: 0x631714c176a360a0ec2c272585a2ea3f82eb5f4902ab5966705728edead6c96d
 	relayercommon.Logger.Infof("channelID: %d, sequence: %d, txHash: %s", channelID, sequence, tx.String())
 	return tx, nil
 }
@@ -354,6 +367,7 @@ func (executor *BSCExecutor) BatchRelayCrossChainPackages(channelID relayercommo
 		return nil, err
 	}
 	for seq := startSequence; seq < endSequence; seq++ {
+		// 获取跨链包数据
 		msgBytes, proofBytes, err := executor.GetPackage(channelID, seq, height)
 		if err != nil {
 			return nil, err
@@ -393,7 +407,9 @@ func (executor *BSCExecutor) IsRelayer() (bool, error) {
 	return isRelayer, nil
 }
 
+//
 func (executor *BSCExecutor) RegisterRelayer() (common.Hash, error) {
+	// 获取nonce值
 	nonce, err := executor.GetClient().PendingNonceAt(context.Background(), executor.txSender)
 	if err != nil {
 		return common.Hash{}, err
@@ -402,13 +418,14 @@ func (executor *BSCExecutor) RegisterRelayer() (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	// 合约实例
 	instance, err := relayerhub.NewRelayerhub(relayerHubContractAddr, executor.GetClient())
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	// tx value值设为100BNB
 	txOpts.Value = big.NewInt(1).Mul(big.NewInt(100), big.NewInt(1e18)) //100 BNB
+	// 调用Relayerhub合约的Register方法
 	tx, err := instance.Register(txOpts)
 	if err != nil {
 		return common.Hash{}, err
@@ -416,17 +433,18 @@ func (executor *BSCExecutor) RegisterRelayer() (common.Hash, error) {
 	return tx.Hash(), nil
 }
 
+// 查询奖励
 func (executor *BSCExecutor) QueryReward() (*big.Int, error) {
 	callOpts, err := executor.getCallOpts()
 	if err != nil {
 		return nil, err
 	}
-
+	// 中继者奖励合约实例
 	instance, err := relayerincentivize.NewRelayerincentivize(relayerIncentivizeContractAddr, executor.GetClient())
 	if err != nil {
 		return nil, err
 	}
-
+	//
 	reward, err := instance.RelayerRewardVault(callOpts, executor.txSender)
 	if err != nil {
 		return nil, err
@@ -448,7 +466,7 @@ func (executor *BSCExecutor) ClaimReward() (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	// 提取奖励
 	tx, err := instance.ClaimRelayerReward(txOpts, executor.txSender)
 	if err != nil {
 		return common.Hash{}, err
@@ -457,6 +475,7 @@ func (executor *BSCExecutor) ClaimReward() (common.Hash, error) {
 }
 
 func (executor *BSCExecutor) GetNextSequence(channelID relayercommon.CrossChainChannelID) (uint64, error) {
+	// 跨链合约实例
 	crossChainInstance, err := crosschain.NewCrosschain(crossChainContractAddr, executor.GetClient())
 	if err != nil {
 		return 0, err
