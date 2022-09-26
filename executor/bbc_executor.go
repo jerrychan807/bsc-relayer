@@ -187,14 +187,15 @@ func (executor *BBCExecutor) MonitorCrossChainPackage(height int64, preValidator
 		return nil, nil, err
 	}
 
-	var taskSet common.TaskSet
+	var taskSet common.TaskSet // 任务集合
 	taskSet.Height = uint64(height)
 
 	var curValidatorsHash cmn.HexBytes
 	if preValidatorsHash != nil {
-		// validators hash发生变化
+		// 比较hash值,validators集合是否发生变化
 		if !bytes.Equal(block.Block.Header.ValidatorsHash, preValidatorsHash) ||
 			!bytes.Equal(block.Block.Header.ValidatorsHash, block.Block.Header.NextValidatorsHash) {
+			// 验证者集合发生变化
 			// 设置新任务
 			taskSet.TaskList = append(taskSet.TaskList, common.Task{
 				ChannelID: PureHeaderSyncChannelID,
@@ -204,16 +205,21 @@ func (executor *BBCExecutor) MonitorCrossChainPackage(height int64, preValidator
 			curValidatorsHash = preValidatorsHash
 		}
 	}
-	//
+	// 循环区块结果里的事件
 	for _, event := range blockResults.Results.EndBlock.Events {
 		// CrossChainPackageEventType = "IBCPackage"
 		// eg:在bc上创建新的验证者会出现 event: type:"IBCPackage" attributes:<key:"IBCPackageInfo" value:"2::8::0" >
-
-		if event.Type == CrossChainPackageEventType {
+		if event.Type == CrossChainPackageEventType { // 事件类型为IBCPackage 跨链数据包
 			for _, tag := range event.Attributes {
+				// 	CorssChainPackageInfoAttributeKey = "IBCPackageInfo"
 				if string(tag.Key) != CorssChainPackageInfoAttributeKey {
 					continue
 				}
+				// value通过“::”分隔为3个字段，
+				// 分别为 CrossChainID of destination chain:目标chainId
+				// channel id: 通道id
+				// sequence: 通道里的序列号
+				// value值例子: "2::8::0"
 				items := strings.Split(string(tag.Value), separator)
 				if len(items) != 3 {
 					continue

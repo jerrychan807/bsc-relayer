@@ -30,10 +30,11 @@ func (r *Relayer) getLatestHeight() uint64 {
 	return uint64(abciInfo.Response.LastBlockHeight)
 }
 
+// 中继器守护进程-加速/竞争模式
 func (r *Relayer) relayerCompetitionDaemon(startHeight uint64, curValidatorsHash cmn.HexBytes) {
-	var tashSet *common.TaskSet
+	var tashSet *common.TaskSet // 任务列表
 	var err error
-	height := startHeight
+	height := startHeight //
 	common.Logger.Info("Start relayer daemon in competition mode")
 	for {
 		// 获取最新区块高度
@@ -48,7 +49,7 @@ func (r *Relayer) relayerCompetitionDaemon(startHeight uint64, curValidatorsHash
 			height = latestHeight + 1
 			continue // packages have been delivered on cleanup
 		}
-
+		// 获取任务列表
 		tashSet, curValidatorsHash, err = r.bbcExecutor.MonitorCrossChainPackage(int64(height), curValidatorsHash)
 		if err != nil {
 			sleepTime := time.Duration(r.bbcExecutor.Config.BBCConfig.SleepMillisecondForWaitBlock * int64(time.Millisecond))
@@ -59,6 +60,7 @@ func (r *Relayer) relayerCompetitionDaemon(startHeight uint64, curValidatorsHash
 		// Found validator set change
 		if len(tashSet.TaskList) > 0 {
 			if tashSet.TaskList[0].ChannelID == executor.PureHeaderSyncChannelID {
+				// 调用轻客户端合约，同步区块头
 				txHash, err := r.bscExecutor.SyncTendermintLightClientHeader(tashSet.Height)
 				if err != nil {
 					common.Logger.Error(err.Error())
@@ -89,6 +91,7 @@ func (r *Relayer) relayerCompetitionDaemon(startHeight uint64, curValidatorsHash
 		common.Logger.Infof("Syncing header: %d, txHash: %s", tashSet.Height+1, txHash.String())
 
 		for _, task := range tashSet.TaskList {
+			// 发送跨链包
 			_, err := r.bscExecutor.RelayCrossChainPackage(task.ChannelID, task.Sequence, tashSet.Height)
 			if err != nil {
 				common.Logger.Error(err.Error())
