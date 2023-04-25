@@ -12,11 +12,14 @@ const (
 	MaxBatchSize = 30
 )
 
+// 清理之前的包
 func (r *Relayer) cleanPreviousPackages(height uint64) (bool, error) {
 	blockSynced := false
 	needAccelerate := false
 	common.Logger.Infof("Cleanup packages at height %d", height)
+	// 遍历所有通道
 	for _, channelId := range r.bbcExecutor.Config.CrossChainConfig.MonitorChannelList {
+		// 获取序列号
 		nextSequence, err := r.bbcExecutor.GetNextSequence(common.CrossChainChannelID(channelId), int64(height))
 		if err != nil {
 			r.bbcExecutor.SwitchBCClient()
@@ -48,6 +51,7 @@ func (r *Relayer) cleanPreviousPackages(height uint64) (bool, error) {
 			if nextSequence > nextDeliverSequence+MaxBatchSize {
 				nextSequence = nextDeliverSequence + MaxBatchSize
 			}
+			// BatchRelayCrossChainPackages 批量发送跨链包
 			_, err = r.bscExecutor.BatchRelayCrossChainPackages(common.CrossChainChannelID(channelId), nextDeliverSequence, nextSequence, height)
 			if err != nil {
 				return needAccelerate, err

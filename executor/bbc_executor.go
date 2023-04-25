@@ -170,6 +170,7 @@ func (executor *BBCExecutor) UpdateClients() {
 	}
 }
 
+// 提交证据???
 func (executor *BBCExecutor) SubmitEvidence(headers []*bsc.Header) (*coretypes.ResultBroadcastTx, error) {
 	return client.BSCSubmitEvidence(executor.GetClient(), executor.keyManager.GetAddr(), headers, rpc.Sync)
 }

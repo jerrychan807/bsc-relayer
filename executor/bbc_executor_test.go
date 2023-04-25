@@ -9,6 +9,7 @@ import (
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
 )
 
+
 func TestBBCExecutor_GetSequence(t *testing.T) {
 	bbcExecutor, err := NewBBCExecutor(cfg, ctypes.TmpTestNetwork)
 	require.NoError(t, err)
